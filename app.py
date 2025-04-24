@@ -8,79 +8,92 @@ predictor = TableDicePredictor()
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang="ko">
+<html lang='ko'>
 <head>
-    <meta charset="UTF-8">
-    <title>다이사이 예측기</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { font-family: 'Nanum Gothic', sans-serif; background: #f8f9fa; }
-        .container { max-width: 700px; margin-top: 40px; }
-        .result-box { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-    </style>
+  <meta charset='UTF-8'>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>다이사이 예측기</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+        background: #fdfdfd;
+        font-family: 'Nanum Gothic', sans-serif;
+    }
+    .container {
+        max-width: 480px;
+        padding: 20px;
+        margin: auto;
+    }
+    .title {
+        color: #6c5ce7;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .form-control, .form-select {
+        background-color: #f3f0ff;
+        border: 1px solid #dcd6f7;
+    }
+    .btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .result-box {
+        background: #fff6fb;
+        border: 1px solid #f9d6e5;
+        padding: 15px;
+        border-radius: 10px;
+        margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h2 class="mb-4 text-primary">🎲 다이사이 예측기 (Flask)</h2>
+<div class="container">
+  <h2 class="title">🎲 다이사이 예측기</h2>
 
-        {% if not session.get('authenticated') %}
-        <form method="post">
-            <input type="hidden" name="form_type" value="login">
-            <div class="mb-3">
-                <label class="form-label">비밀번호</label>
-                <input type="password" class="form-control" name="password" required>
-            </div>
-            <button type="submit" class="btn btn-primary">로그인</button>
-        </form>
-        {% else %}
+  {% if not session.get('authenticated') %}
+    <form method="post">
+      <input type="hidden" name="form_type" value="login">
+      <div class="mb-3">
+        <input type="password" class="form-control" name="password" placeholder="비밀번호 입력" required>
+      </div>
+      <button type="submit" class="btn btn-primary">🔐 로그인</button>
+    </form>
+  {% else %}
+    <form method="post">
+      <input type="hidden" name="form_type" value="predict">
+      <select class="form-select mb-2" name="table">
+        {% for t in tables %}
+          <option value="{{ t }}" {% if t == current %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+      <input type="text" class="form-control mb-2" name="input" placeholder="주사위 입력 (예: 123456)" required>
+      <button type="submit" class="btn btn-success">🎯 예측 실행</button>
+    </form>
 
-        <form method="post" class="mb-3">
-            <input type="hidden" name="form_type" value="predict">
-            <div class="mb-3">
-                <label class="form-label">테이블 선택</label>
-                <select class="form-select" name="table">
-                    {% for t in tables %}
-                        <option value="{{ t }}" {% if t == current %}selected{% endif %}>{{ t }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">주사위 입력 (예: 123456)</label>
-                <input type="text" class="form-control" name="input" required>
-            </div>
-            <button type="submit" class="btn btn-success">🎯 추가 + 예측</button>
-        </form>
+    <form method="post">
+      <input type="hidden" name="form_type" value="simulate">
+      <input type="number" name="count" class="form-control mb-2" value="100" min="1" max="1000">
+      <select class="form-select mb-2" name="table">
+        {% for t in tables %}
+          <option value="{{ t }}" {% if t == current %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-warning">🧪 시뮬레이션 실행</button>
+    </form>
 
-        <form method="post" class="mb-3">
-            <input type="hidden" name="form_type" value="simulate">
-            <div class="mb-3">
-                <label class="form-label">테이블 선택 (시뮬레이션용)</label>
-                <select class="form-select" name="table">
-                    {% for t in tables %}
-                        <option value="{{ t }}" {% if t == current %}selected{% endif %}>{{ t }}</option>
-                    {% endfor %}
-                </select>
-                <label class="form-label mt-2">횟수</label>
-                <input type="number" class="form-control" name="count" value="100" min="1" max="1000">
-            </div>
-            <button type="submit" class="btn btn-warning">🧪 시뮬레이션 실행</button>
-        </form>
+    <form method="post">
+      <input type="hidden" name="form_type" value="reset">
+      <input type="hidden" name="table" value="{{ current }}">
+      <button type="submit" class="btn btn-danger">🔄 {{ current }} 테이블 초기화</button>
+    </form>
 
-        <form method="post" class="mb-3">
-            <input type="hidden" name="form_type" value="reset">
-            <input type="hidden" name="table" value="{{ current }}">
-            <button type="submit" class="btn btn-danger">🔄 {{ current }} 테이블 데이터 초기화</button>
-        </form>
-
-        {% if result %}
-            <div class="result-box mt-4">
-                <h5 class="text-success">📈 결과</h5>
-                <p>{{ result|safe }}</p>
-            </div>
-        {% endif %}
-
-        {% endif %}
+    {% if result %}
+    <div class="result-box">
+      {{ result|safe }}
     </div>
+    {% endif %}
+  {% endif %}
+</div>
 </body>
 </html>
 """
@@ -94,13 +107,11 @@ def home():
 
     if request.method == "POST":
         form_type = request.form.get("form_type")
-
         if form_type == "login":
             if request.form.get("password") == "4265":
                 session["authenticated"] = True
             else:
-                result = "❌ 잘못된 비밀번호입니다."
-
+                result = "❌ 비밀번호가 틀렸습니다."
         elif form_type == "reset":
             table = request.form.get("table")
             predictor.histories[table] = []
@@ -108,7 +119,6 @@ def home():
             if hasattr(predictor, 'accuracy_log'):
                 predictor.accuracy_log = []
             result = f"🔄 '{table}' 테이블 데이터 초기화 완료!"
-
         elif form_type == "predict":
             table = request.form['table']
             user_input = request.form['input']
@@ -125,17 +135,16 @@ def home():
                 actual_sum = sum(actual)
                 reason = "✅ 정확한 예측입니다." if actual_sum == pred_sum else f"❌ 오차 발생 (실제 합: {actual_sum})"
                 result = (
-                    f"빈도 기반 예측: {freq_pred}<br>"
-                    f"🤖 머신러닝 예측: {ml_pred} (합: {pred_sum})<br>"
-                    f"🎯 실제 입력: {actual} (합: {actual_sum})<br>"
-                    f"🔍 분석 결과: {reason}<br>"
+                    f"<b>빈도 기반 예측:</b> {freq_pred}<br>"
+                    f"<b>🤖 머신러닝 예측:</b> {ml_pred} (합: {pred_sum})<br>"
+                    f"<b>🎯 실제 입력:</b> {actual} (합: {actual_sum})<br>"
+                    f"<b>📌 분석 결과:</b> {reason}<br>"
                 )
                 if not hasattr(predictor, 'accuracy_log'):
                     predictor.accuracy_log = []
                 predictor.accuracy_log.append(pred_sum == actual_sum)
             else:
-                result = "⚠️ 데이터 부족: 머신러닝 예측 불가"
-
+                result = "⚠️ 데이터 부족으로 머신러닝 예측을 실행할 수 없습니다."
         elif form_type == "simulate":
             count = int(request.form.get("count", 100))
             table = request.form.get("table", "sim")
@@ -158,9 +167,9 @@ def home():
             avg_diff = total_diff / count
             acc = (correct / count) * 100
             result = (
-                f"🧪 {count}회 시뮬레이션 완료<br>"
+                f"<b>🧪 {count}회 시뮬레이션 완료</b><br>"
                 f"🎯 정확히 맞춘 횟수: {correct} / {count}<br>"
-                f"📊 누적 정확도: {acc:.2f}%<br>"
+                f"📊 정확도: {acc:.2f}%<br>"
                 f"📉 평균 오차: {avg_diff:.2f}"
             )
 
