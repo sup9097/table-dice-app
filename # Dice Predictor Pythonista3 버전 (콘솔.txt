@@ -1,0 +1,121 @@
+# Dice Predictor Pythonista3 버전 (콘솔 기반)
+import itertools
+import numpy as np
+import joblib
+from collections import Counter, defaultdict
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+
+class DicePredictor:
+    def __init__(self):
+        self.history = []
+        self.model_path = "dice_predictor_model.pkl"
+        self.model = None
+
+    def add_roll(self, roll):
+        if len(roll) == 3 and all(1 <= x <= 6 for x in roll):
+            self.history.append(tuple(sorted(roll)))
+
+    def add_batch_input(self, input_string):
+        if input_string and len(input_string) % 3 == 0:
+            rolls = [tuple(sorted(map(int, input_string[i:i+3]))) for i in range(0, len(input_string), 3)]
+            for roll in rolls:
+                self.add_roll(roll)
+
+    def predict_next(self, top_n=2):
+        if not self.history:
+            return [tuple(sorted((np.random.randint(1, 7), np.random.randint(1, 7), np.random.randint(1, 7)))) for _ in range(top_n)]
+        counter = Counter(self.history)
+        most_common = counter.most_common(top_n)
+        return [comb for comb, _ in most_common]
+
+    def get_most_frequent_single_number(self):
+        flat_numbers = [num for comb in self.history for num in comb]
+        counter = Counter(flat_numbers)
+        return counter.most_common(1)[0][0] if counter else None
+
+    def correlated_predictions(self):
+        if len(self.history) < 5:
+            return []
+        position_counters = [defaultdict(int) for _ in range(3)]
+        for roll in self.history:
+            for i in range(3):
+                position_counters[i][roll[i]] += 1
+        top_values = [sorted(counter.items(), key=lambda x: -x[1])[0][0] for counter in position_counters]
+        alt_values = [sorted(counter.items(), key=lambda x: -x[1])[1][0] if len(counter) > 1 else val for counter, val in zip(position_counters, top_values)]
+        return [tuple(top_values), tuple(alt_values)]
+
+    def train_model(self):
+        if len(self.history) < 5:
+            return "Not enough data to train"
+        X = np.array(self.history[:-1])
+        y = np.array(self.history[1:])
+        self.model = MultiOutputClassifier(RandomForestClassifier(n_estimators=100, random_state=42))
+        self.model.fit(X, y)
+        joblib.dump(self.model, self.model_path)
+        return "Model trained and saved."
+
+    def load_model(self):
+        try:
+            self.model = joblib.load(self.model_path)
+            return "Model loaded."
+        except FileNotFoundError:
+            return "Model file not found."
+
+    def predict_with_model(self):
+        if self.model is None:
+            load_status = self.load_model()
+            if self.model is None:
+                return load_status
+        last_roll = np.array([self.history[-1]])
+        return self.model.predict(last_roll)[0]
+
+    def evaluate_accuracy(self):
+        if len(self.history) < 10:
+            return None
+        X = np.array(self.history[:-1])
+        y = np.array(self.history[1:])
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        model = MultiOutputClassifier(RandomForestClassifier(n_estimators=100, random_state=42))
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        accuracies = [accuracy_score(y_test[:, i], y_pred[:, i]) for i in range(3)]
+        return accuracies
+
+    def generate_report(self):
+        flat_numbers = [num for comb in self.history for num in comb]
+        counter = Counter(flat_numbers)
+        plt.bar(counter.keys(), counter.values())
+        plt.title("🎲 숫자별 등장 빈도")
+        plt.xlabel("주사위 숫자")
+        plt.ylabel("빈도")
+        plt.show()
+
+# 콘솔 기반 실행 인터페이스
+if __name__ == "__main__":
+    predictor = DicePredictor()
+    while True:
+        print("\n--- 주사위 예측기 ---")
+        user_input = input("숫자 입력 (3자리씩, 예: 123456456), 'exit' 입력 시 종료: ")
+        if user_input.lower() == 'exit':
+            break
+        predictor.add_batch_input(user_input)
+
+        print("\n[빈도 기반 예측]:", predictor.predict_next())
+        print("[연관성 기반 조합]:", predictor.correlated_predictions())
+        print("[가장 많이 나온 숫자]:", predictor.get_most_frequent_single_number())
+
+        print("[모델 학습 결과]:", predictor.train_model())
+        print("[머신러닝 예측]:", predictor.predict_with_model())
+
+        acc = predictor.evaluate_accuracy()
+        if acc:
+            print("[예측 정확도]:", {f"{i+1}번 주사위": f"{a*100:.2f}%" for i, a in enumerate(acc)})
+        else:
+            print("[정확도 평가]: 충분한 데이터가 없습니다.")
+
+        print("[분석 그래프 출력]")
+        predictor.generate_report()
